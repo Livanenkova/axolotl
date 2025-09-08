@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Axolotl Pro — автономный поиск референсов: извлечение ссылок из HTML, статусы, очищенный HTML и референсы." />
+  <title>Axolotl Pro</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* --- Cleaned CSS for Axolotl Pro + small a11y utilities --- */
+    :root{
+      --bg:#f4f4f9;--fg:#222;--muted:#666;--pri:#004ED6;--card:#fff;--bd:#e5e7eb;
+      --ok:#10b981;--ok-ink:#065f46;--warn:#f59e0b;--warn-ink:#92400e;
+      --err:#ef4444;--err-ink:#991b1b;--net:#6366f1;--net-ink:#3730a3;
+      --shadow:0 4px 16px rgba(0,0,0,.06);--radius:12px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--fg)}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;box-shadow:var(--shadow);padding:20px}
+    h1{font-size:24px;margin:0 0 10px;color:var(--pri)}
+    h2{font-size:18px;margin:16px 0 8px;color:var(--pri)}
+    textarea,input{width:100%;border:1px solid var(--bd);border-radius:10px;padding:10px;font:inherit}
+    textarea{min-height:140px;resize:vertical}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{border:none;background:var(--pri);color:#fff;font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn.outline{background:#fff;color:var(--pri);border:1px solid var(--pri)}
+    .muted{color:var(--muted);font-size:13px}
+    .progress{height:10px;background:#e6eefc;border-radius:999px;overflow:hidden;margin:12px 0}
+    .progress>span{display:block;height:100%;background:var(--pri);width:0%;transition:width .25s}
+    .list{border:1px solid var(--bd);border-radius:10px;padding:10px;background:#fafafa;max-height:250px;overflow:auto}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--bd);background:#fff;font-size:12px;color:#333}
+    code.block{display:block;white-space:pre-wrap;background:#0b1220;color:#e9eefc;border-radius:10px;padding:12px;overflow:auto}
+    .logo-row{display:flex;align-items:center;gap:12px}
+    .logo{height:60px;width:auto;border-radius:8px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:960px){.grid-2{grid-template-columns:1fr 1fr}}
+    .status-section{border:1px solid var(--bd);border-radius:var(--radius);background:#fff;padding:10px}
+    .status-group{border:1px solid var(--bd);border-radius:var(--radius);background:#fafafa;margin:12px 0;padding:8px 10px}
+    .status-group.ok{border-left:5px solid var(--ok)}
+    .status-group.redirect{border-left:5px solid var(--warn)}
+    .status-group.client,.status-group.server{border-left:5px solid var(--err)}
+    .status-group.net{border-left:5px solid var(--net)}
+    .status-title{display:flex;align-items:center;gap:6px;font-weight:700;margin:4px 0 8px}
+    .status-item{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin:6px 0}
+    .status-code{font-weight:800}
+    .status-code.ok{color:var(--ok-ink)}
+    .status-code.redirect{color:var(--warn-ink)}
+    .status-code.err{color:var(--err-ink)}
+    .status-code.net{color:var(--net-ink)}
+    .status-note{color:#555;font-size:12px}
+    .status-summary{margin:8px 0;padding:6px 10px;border-radius:8px;background:#f0f4ff;font-size:14px}
+    .refs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .icon-btn{background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:4px;transition:transform .2s}
+    .icon-btn:hover{transform:scale(1.2)}
+    .icon-btn:disabled{opacity:.4;cursor:not-allowed}
+    .copy-wrap{position:relative;display:inline-flex;align-items:center}
+    .copy-tip{position:absolute;bottom:100%;right:50%;transform:translateX(50%);margin-bottom:6px;background:var(--ok);color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:20;opacity:0;pointer-events:none;transition:opacity .2s ease}
+    .copy-tip.show{opacity:1}
+    /* a11y helpers */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    /* === Options panel UX === */
+.options-grid{
+  display:grid; gap:14px; 
+  grid-template-columns: repeat(3,minmax(260px,1fr));
+}
+@media (max-width:1100px){ .options-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:720px){  .options-grid{grid-template-columns:1fr} }
+
+.option-card{
+  background:#fafafa; border:1px solid var(--bd); border-radius:12px; padding:12px 14px;
+}
+.option-card h3{
+  margin:0 0 8px; font-size:14px; font-weight:700; color:var(--pri);
+}
+
+/* одна строка опции */
+.opt-row{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; padding:8px 6px; border-radius:10px;
+}
+.opt-row:hover{ background:#f4f6ff }
+
+/* текст слева */
+.opt-text{ line-height:1.25 }
+.opt-title{ font-size:14px; font-weight:600 }
+.opt-hint{ font-size:12px; color:#667085 }
+
+/* красивый switch */
+.switch{
+  --h:22px; --w:40px;
+  position:relative; display:inline-block; width:var(--w); height:var(--h);
+}
+.switch input{ position:absolute; opacity:0; width:0; height:0 }
+.slider{
+  position:absolute; inset:0; cursor:pointer;
+  background:#e5e7eb; border-radius:999px; transition:background .2s;
+}
+.slider::before{
+  content:""; position:absolute; height:18px; width:18px; left:2px; top:2px;
+  background:white; border-radius:50%; box-shadow:0 1px 2px rgba(0,0,0,.15);
+  transition:transform .2s;
+}
+.switch input:checked + .slider{ background:var(--pri) }
+.switch input:checked + .slider::before{ transform:translateX(18px) }
+.switch input:focus-visible + .slider{ outline:2px solid #bcd3ff; outline-offset:2px }
+
+/* поля ввода в “Advanced” */
+.opt-input{
+  width:100%; border:1px solid var(--bd); border-radius:10px; padding:10px; font:inherit;
+  background:#fff;
+}
+.opt-input:focus{ outline:none; border-color:#9db7ff; box-shadow:0 0 0 4px #e9f0ff }
+.opt-stack{ display:flex; flex-direction:column; gap:10px }
+.code-box {
+  display:block;
+  width:100%;
+  background:#fff;
+  color:#333;
+  border:1px solid #ddd;
+  border-radius:10px;
+  padding:12px;
+  min-height:120px;
+  font-family:monospace;
+  font-size:14px;
+  white-space:pre-wrap;
+  word-break:break-word;
+  transition: background .3s, color .3s;
+}
+
+/* когда есть результат */
+.code-box.filled {
+  background:#0b1220;
+  color:#e9eefc;
+
+}
+.intro-card {
+  background:#f4f6ff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:24px 28px;
+  margin-bottom:24px;
+  box-shadow:0 2px 8px rgba(0,0,0,.05);
+  grid-column: 1 / -1; /* ← ключ */
+}
+
+.intro-logo {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:12px;
+}
+
+.intro-logo img {
+  height:70px;
+  border-radius:8px;
+}
+
+.intro-card h1 {
+  font-size:24px;
+  font-weight:700;
+  color:#004ED6;
+  margin:0;
+}
+
+.intro-sub{ font-size:16px; color:#333; margin:12px 0; }
+.intro-list{
+  list-style:disc; padding-left:20px; text-align:left;
+  max-width:720px; margin:0 auto; color:#004ED6;
+}
+.intro-list li{ margin-bottom:6px; }
+.intro-foot{ margin-top:16px; font-size:15px; color:#004ED6; }
+
+  </style>
+</head>
+<body>
+  <header class="wrap" role="banner">
+    <div class="card" aria-label="Заголовок Axolotl Pro">
+<div class="grid grid-2">
+  <div class="intro-card">
+    <div class="intro-logo">
+    <img src="axolotl_embedded_transparent.svg" alt="Логотип Axolotl Pro" class="logo" loading="lazy" referrerpolicy="no-referrer">
+      <h1>Axolotl Pro — your small but reliable assistant</h1>
+    </div>
+    <p class="intro-sub">It does more than just collect links:</p>
+    <ul class="intro-list">
+      <li>Extracts external links and builds a clean References block</li>
+      <li>Checks statuses via proxy (with fallback 4xx/5xx check)</li>
+      <li>Detects duplicates and highlights redirects</li>
+      <li>Normalizes URLs (removes UTM, fixes ports, resolves relative links)</li>
+      <li>Cleans HTML from cluttered tags, inline styles, empty headings</li>
+      <li>Fixes headings (APA Title Case or sentence case)</li>
+      <li>Updates X → Twitter in both links and plain text</li>
+      <li>Optionally appends References back to cleaned HTML</li>
+    </ul>
+    <p class="intro-foot"><strong>Small but mighty — always ready to tidy up your content.</strong></p>
+  </div>
+</div>
+
+  </header>
+
+  <main class="wrap" id="main" tabindex="-1">
+    <section class="card" aria-labelledby="insertHtmlHeading">
+      <h2 id="insertHtmlHeading">1. Paste HTML</h2>
+      <label for="htmlInput" class="sr-only">HTML-код</label>
+      <textarea id="htmlInput" placeholder="Paste HTML content here…" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    </section>
+
+    <section class="card" aria-labelledby="settingsHeading">
+      <h2 id="settingsHeading">2. Options</h2>
+      <form id="settingsForm" novalidate>
+        <fieldset class="card" style="padding:12px" aria-label="Флаги обработки">
+          <legend class="sr-only">Флаги обработки</legend>
+           <div class="options-grid">
+  <!-- Links -->
+  <div class="option-card">
+    <h3>Links</h3>
+
+    <div class="opt-row">
+      <div class="opt-text">
+        <div class="opt-title">External link only</div>
+        <div class="opt-hint">Ignore same-domain links</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="externalOnly" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text">
+        <div class="opt-title">Remove UTM</div>
+        <div class="opt-hint">Drop utm_source, utm_medium, …</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="stripUtm" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">Find duplicates</div></div>
+      <label class="switch">
+        <input type="checkbox" id="findDuplicates" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">X → Twitter</div></div>
+      <label class="switch">
+        <input type="checkbox" id="fixTwitter">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">Check status (via proxy)</div></div>
+      <label class="switch">
+        <input type="checkbox" id="checkStatus" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text">
+        <div class="opt-title">Check links for 4xx/5xx (fallback)</div>
+        <div class="opt-hint">Use public proxy if CF Worker is off</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="check404">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- HTML Cleanup -->
+  <div class="option-card">
+    <h3>HTML Cleanup</h3>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">Clean HTML</div></div>
+      <label class="switch">
+        <input type="checkbox" id="cleanHtml">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text">
+        <div class="opt-title">Fix headings (Title Case – APA)</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="fixHeadingsTitleCase">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">Fix headings (Sentence case)</div></div>
+      <label class="switch">
+        <input type="checkbox" id="fixHeadingsSentenceCase">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="opt-row">
+      <div class="opt-text"><div class="opt-title">Append references to cleaned HTML</div></div>
+      <label class="switch">
+        <input type="checkbox" id="appendReferences">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Advanced -->
+  <div class="option-card">
+    <h3>Advanced</h3>
+    <div class="opt-stack">
+      <input id="excludeHosts" class="opt-input" placeholder="Exclude domains (comma separated), e.g.: techopedia.com, example.org">
+      <input id="baseUrl" class="opt-input" placeholder="Base URL for relative links (optional)">
+    </div>
+  </div>
+</div>
+
+
+          <div class="row" style="margin-top:8px">
+            <label for="excludeHosts" class="sr-only">Исключить домены</label>
+            <input id="excludeHosts" placeholder="Exclude domains (comma separated), e.g.: techopedia.com, example.org" inputmode="latin" />
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label for="baseUrl" class="sr-only">Базовый URL</label>
+            <input id="baseUrl" placeholder="Base URL for relative links (optional)" inputmode="url" />
+          </div>
+        </fieldset>
+
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="runBtn" type="button" aria-describedby="runHelp">Start</button>
+          <span class="muted" id="runHelp">Run parsing, status check & references.</span>
+        </div>
+
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="progressLabel">
+          <span id="progressBar"></span>
+        </div>
+        <p id="progressLabel" class="sr-only">Прогресс обработки</p>
+      </form>
+    </section>
+
+    <section class="grid grid-2" aria-label="Результаты">
+      <div class="card" aria-labelledby="linksHeading">
+        <h2 id="linksHeading">Links list</h2>
+        <div class="list" id="linksList" aria-live="polite" aria-busy="false"></div>
+        <h2 id="dupesHeading">Duplicates</h2>
+        <div class="list" id="dupesList" aria-live="polite"></div>
+        <h2 id="statusHeading">Link statuses</h2>
+        <div class="status-section" id="statusList" aria-live="polite"></div>
+      </div>
+
+      <div class="card" aria-labelledby="refsHeading">
+        <div class="refs-header">
+          <h2>References (HTML)</h2>
+          <div class="copy-wrap">
+            <button id="copyBtn" class="icon-btn" title="Copy References HTML" aria-label="Copy References HTML" disabled type="button">📋</button>
+            <span id="copyTip" class="copy-tip" role="status" aria-live="polite">Copied!</span>
+          </div>
+        </div>
+        <code class="code-box" id="refsHtml"></code>
+        <h2 id="cleanHeading">Cleaned HTML</h2>
+             <div class="copy-wrap">
+            <button id="copyBtn" class="icon-btn" title="Copy References HTML" aria-label="Copy References HTML" disabled type="button">📋</button>
+            <span id="copyTip" class="copy-tip" role="status" aria-live="polite">Copied!</span>
+          </div>
+        <code class="code-box" id="cleanedHtml"></code>
+      </div>
+    </section>
+  </main>
+
+  <noscript>
+    <div class="wrap"><p class="card danger">Для работы приложения требуется JavaScript.</p></div>
+  </noscript>
+
+  <script>
+  /* ============================================
+   Axolotl Pro — Full JS (with Tardigrade add-ons)
+   ============================================ */
+
+/* ===== Defaults ===== */
+const DEFAULT_PROXY = "https://tardigrade-proxy.arina-livanenkova.workers.dev/";
+
+/* ===== Small utils ===== */
+const el = (s) => document.querySelector(s);
+
+const progress = (n) => {
+  const bar = el('#progressBar');
+  if (bar) bar.style.width = Math.max(0, Math.min(100, n)) + '%';
+  const pr = el('.progress');
+  if (pr) pr.setAttribute('aria-valuenow', String(Math.max(0, Math.min(100, n))));
+};
+
+const escapeHtml = (s = '') =>
+  s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const hostnameOf = (u) => { try { return new URL(u).hostname } catch { return '' } };
+
+const UTM = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id']);
+
+function getQueryParam(name){
+  try { return new URLSearchParams(location.search).get(name) || ''; }
+  catch { return ''; }
+}
+function isHttpUrl(u){
+  try { const x = new URL(u); return /^https?:$/.test(x.protocol); }
+  catch { return false; }
+}
+function getProxyUrl(){
+  const q = (getQueryParam('proxy') || '').trim();
+  if (q && isHttpUrl(q)) return q.replace(/\/+$/, '') + '/'; // ensure trailing slash
+  return DEFAULT_PROXY;
+}
+
+function updateCodeBox(id, content) {
+  const elBox = document.getElementById(id);
+  if (!elBox) return;
+  elBox.textContent = content || '';
+  if (content && content.trim() !== '') {
+    elBox.classList.add('filled');
+  } else {
+    elBox.classList.remove('filled');
+  }
+}
+
+function normalizeUrl(raw, baseUrl, stripUtm = true){
+  try{
+    const u = baseUrl ? new URL(raw, baseUrl) : new URL(raw);
+    u.hash = '';
+    if (stripUtm){
+      for (const k of [...u.searchParams.keys()]) {
+        if (UTM.has(k)) u.searchParams.delete(k);
+      }
+    }
+    u.hostname = u.hostname.toLowerCase();
+    if ((u.protocol === 'http:' && u.port === '80') || (u.protocol === 'https:' && u.port === '443')) u.port = '';
+    return u.toString();
+  }catch{ return null }
+}
+function isExternal(url, baseHostname){
+  if (!baseHostname) return true;
+  try { return new URL(url).hostname !== baseHostname } catch { return true }
+}
+
+async function pLimit(n, tasks){
+  const out = []; let i = 0, active = 0;
+  return await new Promise(res => {
+    const next = () => {
+      while(active < n && i < tasks.length){
+        const fn = tasks[i++]; active++;
+        fn().then(v => out.push(v)).catch(()=>{})
+          .finally(() => { active--; if (i >= tasks.length && active === 0) res(out); else next(); });
+      }
+    };
+    next();
+  });
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))]);
+
+/* ===== Core: parse links ===== */
+function extractLinksFromHtml(html, opts = {}){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Optional X -> Twitter (href)
+  if (opts.fixTwitter){
+    doc.querySelectorAll('a[href*="x.com"]').forEach(a => { a.href = a.href.replace('x.com', 'twitter.com'); });
+    // текстовые URL заменим отдельной функцией (см. ниже) при необходимости
+  }
+
+  const baseUrl  = (opts.baseUrl || '').trim() || (typeof location !== 'undefined' ? location.origin : undefined);
+  const baseHost = baseUrl ? new URL(baseUrl).hostname : undefined;
+
+  const anchors = [...doc.querySelectorAll('a[href]')];
+  const all = [];
+  for (const a of anchors){
+    const href = a.getAttribute('href'); if (!href) continue;
+    const norm = normalizeUrl(href, baseUrl, opts.stripUtm !== false); if (!norm) continue;
+    if (opts.externalOnly && !isExternal(norm, baseHost)) continue;
+    const host = hostnameOf(norm);
+    if (opts.exclude?.length && opts.exclude.some(x => host === x || host.endsWith('.' + x))) continue;
+    all.push(norm);
+  }
+  const counts = new Map(); for (const u of all) counts.set(u, (counts.get(u) || 0) + 1);
+  const unique = [...counts.keys()];
+  return { counts, unique };
+}
+
+/* ===== Core: build References HTML ===== */
+function buildReferencesHtml(items){
+  const lines = items.map(it => {
+    const label = escapeHtml(it.title || it.url);
+    const url   = escapeHtml(it.finalUrl || it.url);
+    const host  = escapeHtml(it.hostname || '');
+    return `<li><a href="${url}" rel="nofollow noopener" target="_blank">${label}</a> (${host})</li>`;
+  }).join('\n');
+  return `\n[reference_content]\n<div class="reference-heading"><h2>References</h2></div>\n<div class="reference-body">\n  <ol>\n${lines}\n  </ol>\n</div>\n[/reference_content]\n`;
+}
+
+/* ===== Core: fetch status/title via proxy (fixed concurrency/timeout) ===== */
+async function enrichReferences(urls, { proxyUrl }){
+  const concurrent = 4;
+  const timeoutMs  = 25000;
+  const proxy = (proxyUrl || '').trim() || DEFAULT_PROXY;
+
+  const tasks = urls.map(u => async () => {
+    const item = { url: u, hostname: hostnameOf(u), status: undefined, finalUrl: u, title: undefined };
+    try{
+      const r = await withTimeout(fetch(`${proxy}?url=${encodeURIComponent(u)}`), timeoutMs);
+      if (!r.ok){ item.status = r.status; return item; }
+      const j = await r.json();
+      item.status   = j.status ?? undefined;
+      item.finalUrl = j.finalUrl || u;
+      item.title    = j.title || j.ogTitle || j.h1 || undefined;
+    }catch{
+      item.status = 0; // network/timeout
+    }
+    return item;
+  });
+
+  const res = await pLimit(concurrent, tasks);
+  const order = new Map(urls.map((u,i) => [u,i]));
+  return res.sort((a,b) => order.get(a.url) - order.get(b.url));
+}
+
+/* ===== HTML Cleaner ===== */
+function cleanHtml(html, opts = {}){
+  const options = {
+    unwrapTags: ['p','span'],
+    removeInlineStyles: true,
+    convertBToStrong: true,
+    removeEmptyHeadings: true,
+    normalizeNbsp: true,
+    cleanAria: true,
+    ...opts
+  };
+
+  const stats = {
+    unwrapped: 0, removedStyles: 0, boldToStrong: 0, emptyHeadings: 0, ariaFixed: 0, nbspReplaced: 0
+  };
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // 1) Unwrap p/span
+  if (options.unwrapTags?.length){
+    const sel = options.unwrapTags.join(',');
+    doc.querySelectorAll(sel).forEach(node => {
+      const parent = node.parentNode; if (!parent) return;
+      while (node.firstChild) parent.insertBefore(node.firstChild, node);
+      parent.removeChild(node);
+      stats.unwrapped++;
+    });
+  }
+
+  // 2) Remove inline styles
+  if (options.removeInlineStyles){
+    doc.querySelectorAll('[style]').forEach(elm => { elm.removeAttribute('style'); stats.removedStyles++; });
+  }
+
+  // 3) <b> -> <strong>
+  if (options.convertBToStrong){
+    doc.querySelectorAll('b').forEach(b => {
+      const strong = doc.createElement('strong');
+      while (b.firstChild) strong.appendChild(b.firstChild);
+      b.replaceWith(strong);
+      stats.boldToStrong++;
+    });
+  }
+
+  // 4) Remove empty headings
+  if (options.removeEmptyHeadings){
+    doc.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+      if (!h.textContent || !h.textContent.trim()){ h.remove(); stats.emptyHeadings++; }
+    });
+  }
+
+  // 5) Clean ARIA
+  if (options.cleanAria){
+    doc.querySelectorAll('ul[aria-label], ol[aria-label]').forEach(list => { list.removeAttribute('aria-label'); stats.ariaFixed++; });
+    doc.querySelectorAll('li[aria-level]').forEach(li => { li.removeAttribute('aria-level'); stats.ariaFixed++; });
+  }
+
+  // 6) Normalize NBSP
+  if (options.normalizeNbsp){
+    // текстовые узлы
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())){
+      const replaced = n.nodeValue.replace(/\u00A0/g, ' ');
+      if (replaced !== n.nodeValue){ n.nodeValue = replaced; stats.nbspReplaced++; }
+    }
+    // &nbsp; в HTML
+    const before = doc.body.innerHTML;
+    const after  = before.replace(/&nbsp;/g, ' ');
+    if (after !== before){ doc.body.innerHTML = after; stats.nbspReplaced++; }
+  }
+
+  const cleaned = doc.body.innerHTML;
+  return { html: cleaned, changed: cleaned !== html, stats };
+}
+
+/* ======== Tardigrade add-ons ======== */
+// 1) Взаимоисключение Title/Sentence case чекбоксов
+(() => {
+  const titleBox = el('#fixHeadingsTitleCase');
+  const sentBox  = el('#fixHeadingsSentenceCase');
+  if (titleBox && sentBox) {
+    titleBox.addEventListener('change', () => { if (titleBox.checked) sentBox.checked = false; });
+    sentBox.addEventListener('change',  () => { if (sentBox.checked)  titleBox.checked = false; });
+  }
+})();
+
+// 2) Капитализация заголовков
+function toSentenceCase(s){
+  s = (s||'').trim();
+  if (!s) return s;
+  s = s.toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function toTitleCaseAPA(text){
+  const minor = new Set(['and','but','for','nor','or','so','yet','a','an','the','as','at','by','in','of','off','on','per','to','up','via']);
+  const parts = text.split(/(\s+)/);
+  let afterPunct = true; // заглавное после : — -
+  return parts.map((w,i) => {
+    if (!w.trim()) return w;
+    const lw = w.toLowerCase();
+    const isFirst = (i===0) || afterPunct;
+    // обновляем флаг: есть ли в левой части двоеточие/тире/дефис
+    afterPunct = /[:—-]\s*$/.test(parts.slice(0,i+1).join(''));
+    if (isFirst || lw.length >= 4 || !minor.has(lw)) return lw.charAt(0).toUpperCase()+lw.slice(1);
+    return lw;
+  }).join('');
+}
+function fixHeadingsCapitalization(doc, mode){
+  const fn = mode === 'sentence' ? toSentenceCase : toTitleCaseAPA;
+  doc.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+    const t = (h.textContent||'').trim();
+    if (t) h.textContent = fn(t);
+  });
+}
+
+// 3) Замена x.com -> twitter.com в ТЕКСТЕ
+function replaceTextXtoTwitter(doc){
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  let n; while ((n = walker.nextNode())){
+    if (/https?:\/\/x\.com/gi.test(n.nodeValue)) {
+      n.nodeValue = n.nodeValue.replace(/https?:\/\/x\.com/gi,'https://twitter.com');
+    }
+  }
+}
+
+// 4) Fallback проверка статусов (через публичный прокси), если выключен checkStatus
+async function checkLinksFallback(urls){
+  const out = [];
+  for (const u of urls){
+    try{
+      const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`);
+      if (!r.ok) { out.push({url:u, status:r.status}); continue; }
+      const j = await r.json();
+      const http = j?.status?.http_code ?? 200;
+      out.push({url:u, status:http});
+    }catch{ out.push({url:u, status:0}); }
+  }
+  return out;
+}
+
+// 5) Добор <title> (если воркер не вернул)
+async function fetchTitleViaProxy(u){
+  try{
+    const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`);
+    if (!r.ok) return null;
+    const html = await r.text();
+    const doc  = new DOMParser().parseFromString(html,'text/html');
+    return (doc.querySelector('title')?.textContent || doc.querySelector('h1')?.textContent || '').trim() || null;
+  }catch{return null}
+}
+
+/* ===== UI bindings ===== */
+(() => {
+  // Кнопка "Start"
+  el('#runBtn')?.addEventListener('click', run);
+
+  // Копирование References HTML
+  const copyBtn = el('#copyBtn');
+  if (copyBtn){
+    copyBtn.addEventListener('click', () => {
+      const text = el('#refsHtml')?.textContent || '';
+      navigator.clipboard.writeText(text).then(() => {
+        const tip = el('#copyTip');
+        if (tip){ tip.classList.add('show'); setTimeout(() => tip.classList.remove('show'), 1200); }
+      });
+    });
+  }
+})();
+
+/* ===== Main ===== */
+async function run(){
+  // 0) Reset UI
+  progress(0);
+  const linksList  = el('#linksList');
+  const dupesList  = el('#dupesList');
+  const statusList = el('#statusList');
+  const copyBtn    = el('#copyBtn');
+  if (linksList)  linksList.innerHTML = '';
+  if (dupesList)  dupesList.innerHTML = '';
+  if (statusList) statusList.innerHTML = '';
+  if (copyBtn)    copyBtn.disabled = true;
+  updateCodeBox('refsHtml','');
+  updateCodeBox('cleanedHtml','');
+
+  // 1) Options
+  const rawInput = el('#htmlInput')?.value || '';
+  const useClean = el('#cleanHtml')?.checked ?? true;
+  const opts = {
+    externalOnly: el('#externalOnly')?.checked ?? true,
+    stripUtm:     el('#stripUtm')?.checked ?? true,
+    fixTwitter:   el('#fixTwitter')?.checked ?? false,
+    exclude:      (el('#excludeHosts')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
+    baseUrl:      (el('#baseUrl')?.value || '').trim() || undefined,
+  };
+  const proxyUrl = getProxyUrl();
+  const doCheck  = el('#checkStatus')?.checked ?? true;
+
+  // 2) Clean HTML (optional)
+  let workingHtml = rawInput;
+  if (useClean){
+    const { html: cleaned } = cleanHtml(rawInput);
+    workingHtml = cleaned;
+    updateCodeBox('cleanedHtml', workingHtml);
+  }
+
+  // 2.1) Капитализация заголовков (если чекбоксы включены)
+  if (el('#fixHeadingsTitleCase')?.checked || el('#fixHeadingsSentenceCase')?.checked) {
+    const mode = el('#fixHeadingsSentenceCase')?.checked ? 'sentence' : 'title';
+    const doc = new DOMParser().parseFromString(workingHtml,'text/html');
+    fixHeadingsCapitalization(doc, mode);
+    workingHtml = doc.body.innerHTML;
+    updateCodeBox('cleanedHtml', workingHtml);
+  }
+
+  // 3) Авто-обёртка голых URL
+  const urlRegex = /\bhttps?:\/\/[^\s<>"']+/gi;
+  if (!/<a\s/i.test(workingHtml) && urlRegex.test(workingHtml)){
+    workingHtml = workingHtml.replace(urlRegex, m => `<a href="${m}">${m}</a>`);
+    updateCodeBox('cleanedHtml', workingHtml);
+  }
+
+  // 3.1) X -> Twitter в тексте
+  if (opts.fixTwitter){
+    const doc = new DOMParser().parseFromString(workingHtml,'text/html');
+    replaceTextXtoTwitter(doc);
+    workingHtml = doc.body.innerHTML;
+    updateCodeBox('cleanedHtml', workingHtml);
+  }
+
+  // 4) Извлечь ссылки + дубликаты
+  const { counts, unique } = extractLinksFromHtml(workingHtml, opts);
+  const dupes = [...counts.entries()].filter(([, n]) => n > 1);
+
+  if (linksList){
+    linksList.innerHTML = unique
+      .map(u => `<div><span class="pill">${escapeHtml(hostnameOf(u))}</span> <a href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(u)}</a></div>`)
+      .join('');
+  }
+  if (dupesList){
+    dupesList.innerHTML = dupes.length
+      ? dupes.map(([u, n]) => `<div><a href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(u)}</a> — ${n}×</div>`).join('')
+      : '<span class="muted">No duplicates</span>';
+  }
+
+  progress(40);
+
+  // 5) Проверка статусов
+  let items = unique.map(u => ({ url: u, hostname: hostnameOf(u) }));
+  if (doCheck) {
+    items = await enrichReferences(unique, { proxyUrl });
+    for (const it of items){
+      if (!it.title){
+        const t = await fetchTitleViaProxy(it.finalUrl || it.url);
+        if (t) it.title = t;
+      }
+    }
+  } else if (el('#check404')?.checked) {
+    const fb = await checkLinksFallback(unique);
+    const map = new Map(fb.map(x => [x.url, x.status]));
+    items = unique.map(u => ({
+      url: u,
+      hostname: hostnameOf(u),
+      status: map.get(u) ?? undefined,
+      finalUrl: u
+    }));
+    for (const it of items){
+      const t = await fetchTitleViaProxy(it.finalUrl || it.url);
+      if (t) it.title = t;
+    }
+  }
+
+  // 6) Группировка статусов
+  const groups = { ok: [], redirect: [], client: [], server: [], net: [] };
+  for (const it of items){
+    const s = Number(it.status || 0);
+    if (s === 0) groups.net.push(it);
+    else if (s >= 200 && s < 300) groups.ok.push(it);
+    else if (s >= 300 && s < 400) groups.redirect.push(it);
+    else if (s >= 400 && s < 500) groups.client.push(it);
+    else if (s >= 500) groups.server.push(it);
+  }
+
+  const total = items.length || 1;
+  const percent = (count) => ((count / total * 100).toFixed(0)) + '%';
+  const labelOf   = it => (Number(it.status || 0) === 0 ? 'TIMEOUT/NETWORK' : String(it.status));
+  const codeClass = s  => { const n = Number(s || 0); if (n === 0) return 'net'; if (n >= 200 && n < 300) return 'ok'; if (n >= 300 && n < 400) return 'redirect'; return 'err'; };
+
+  const line = it => {
+    const c = codeClass(it.status);
+    const title = it.title ? ` — <span class="muted">${escapeHtml(it.title)}</span>` : '';
+    return `<div class="status-item">
+      <span class="pill">${escapeHtml(it.hostname || '')}</span>
+      <a href="${escapeHtml(it.finalUrl || it.url)}" target="_blank" rel="noopener">${escapeHtml(it.url)}</a>
+      — status: <span class="status-code ${c}">${escapeHtml(labelOf(it))}</span>${title}
+    </div>`;
+  };
+  const section = (title, arr, cls, icon) =>
+    arr.length
+      ? `<div class="status-group ${cls}">
+           <div class="status-title">${icon} ${title} — ${arr.length} (${percent(arr.length)})</div>
+           ${arr.map(line).join('')}
+         </div>`
+      : '';
+
+  const totalLinks = items.length;
+  const totalDupes = dupes.length;
+  const errors     = groups.client.length + groups.server.length + groups.net.length;
+  const summary = `<div class="status-summary">
+    <strong>Total links:</strong> ${totalLinks} |
+    <strong>Unique:</strong> ${unique.length} |
+    <strong>Duplicates:</strong> ${totalDupes} |
+    <strong>Errors:</strong> ${errors}
+  </div>`;
+
+  if (statusList){
+    statusList.innerHTML = items.length
+      ? summary + `<div class="status-section">
+           ${section('OK (2xx)',            groups.ok,       'ok',       '✅')}
+           ${section('Redirect (3xx)',      groups.redirect, 'redirect', '↪️')}
+           ${section('Client Error (4xx)',  groups.client,   'client',   '❌')}
+           ${section('Server Error (5xx)',  groups.server,   'server',   '🛑')}
+           ${section('Network/Timeout (0)', groups.net,      'net',      '🌐')}
+         </div>`
+      : '<span class="muted">No links</span>';
+  }
+
+  progress(80);
+
+  // 7) References HTML
+  const refs = buildReferencesHtml(items);
+  updateCodeBox('refsHtml', refs);
+  const resultTA = el('#resultHtml');
+  if (resultTA) resultTA.value = refs;
+  if (copyBtn)  copyBtn.disabled = false;
+
+  // 7.1) Append references в очищенный HTML
+  if (el('#appendReferences')?.checked) {
+    updateCodeBox('cleanedHtml', (workingHtml + '\n\n' + refs));
+  }
+
+  progress(100);
+}
+
+
+
+  </script>
+</body>
+</html>
